@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+build/
+.env*
+!.env.example
+.DS_Store
+npm-debug.log*
+.env.local
+.env.*.local
+node_modules/
+.next/
