@@ -4,7 +4,6 @@ import Link from "next/link";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { normalizeIndianPhone } from "@/lib/validation";
-import TurnstileWidget from "@/components/TurnstileWidget";
 
 type Product = {
   id: string;
@@ -25,18 +24,48 @@ type CartItem = {
 };
 
 const sampleProducts: Product[] = [
-  { id: "sample-1", name: "Mitti Ka Diya", category: "Diya & Lighting", description: "Traditional earthen diyas for Diwali.", price: 10, stock: 100, unit: "piece", image_url: "", video_url: "", active: true },
-  { id: "sample-2", name: "Colourful Diya", category: "Diya & Lighting", description: "Colourful decorative diya.", price: 25, stock: 40, unit: "piece", image_url: "", video_url: "", active: true },
-  { id: "sample-3", name: "Lakshmi Ganesh Murti", category: "Idols & Murtis", description: "A festive pair for your home mandir.", price: 180, stock: 18, unit: "set", image_url: "", video_url: "", active: true },
-  { id: "sample-4", name: "Brass Pooja Murti", category: "Idols & Murtis", description: "Traditional brass pooja murti.", price: 650, stock: 6, unit: "piece", image_url: "", video_url: "", active: true },
-  { id: "sample-5", name: "Flower Mala", category: "Garlands & Decor", description: "Decorative mala for your pooja.", price: 60, stock: 30, unit: "piece", image_url: "", video_url: "", active: true },
-  { id: "sample-6", name: "Shubh Labh Sticker", category: "Stickers & Rangoli", description: "Festive entrance sticker set.", price: 30, stock: 0, unit: "pack", image_url: "", video_url: "", active: true },
-  { id: "sample-7", name: "Pooja Aasan", category: "Pooja Essentials", description: "Aasan for daily pooja.", price: 90, stock: 15, unit: "piece", image_url: "", video_url: "", active: true },
-  { id: "sample-8", name: "Pooja Chunni", category: "Pooja Essentials", description: "Traditional chunni for pooja.", price: 75, stock: 11, unit: "piece", image_url: "", video_url: "", active: true },
-  { id: "sample-9", name: "Festival Jhaadu", category: "Brooms", description: "A household festive essential.", price: 55, stock: 22, unit: "piece", image_url: "", video_url: "", active: true },
+  {
+    id: "sample-1",
+    name: "Mitti Ka Diya",
+    category: "Diya & Lighting",
+    description: "Traditional earthen diya.",
+    price: 10,
+    stock: 100,
+    unit: "piece",
+    image_url: "",
+    video_url: "",
+    active: true,
+  },
+  {
+    id: "sample-2",
+    name: "Colourful Diya",
+    category: "Diya & Lighting",
+    description: "Decorative festive diya.",
+    price: 25,
+    stock: 40,
+    unit: "piece",
+    image_url: "",
+    video_url: "",
+    active: true,
+  },
+  {
+    id: "sample-3",
+    name: "Lakshmi Ganesh Murti",
+    category: "Idols & Murtis",
+    description: "Festive pooja murti set.",
+    price: 180,
+    stock: 18,
+    unit: "set",
+    image_url: "",
+    video_url: "",
+    active: true,
+  },
 ];
 
-const categoryMeta: Record<string, { icon: string; colour: string }> = {
+const categoryMeta: Record<
+  string,
+  { icon: string; colour: string }
+> = {
   "Diya & Lighting": { icon: "🪔", colour: "peach" },
   "Idols & Murtis": { icon: "🛕", colour: "pink" },
   "Pooja Essentials": { icon: "🙏", colour: "cream" },
@@ -58,10 +87,16 @@ function createOrderKey(): string {
     return crypto.randomUUID();
   }
 
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = Math.floor(Math.random() * 16);
-    return (c === "x" ? r : (r & 3) | 8).toString(16);
-  });
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+    /[xy]/g,
+    (character) => {
+      const random = Math.floor(Math.random() * 16);
+      const value =
+        character === "x" ? random : (random & 3) | 8;
+
+      return value.toString(16);
+    },
+  );
 }
 
 export default function Storefront() {
@@ -76,6 +111,7 @@ export default function Storefront() {
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All products");
+
   const [cart, setCart] = useState<Record<string, number>>({});
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -83,17 +119,13 @@ export default function Storefront() {
   const [name, setName] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [address, setAddress] = useState("");
-  const [captchaToken, setCaptchaToken] = useState("");
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [orderId, setOrderId] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState("");
 
-  /*
-   * FIXED:
-   * Narrow Supabase client to a non-null type BEFORE passing it
-   * into the async function. This fixes "client is possibly null".
-   */
+  // Load actual products from Supabase.
   useEffect(() => {
     const client = supabase;
 
@@ -106,7 +138,7 @@ export default function Storefront() {
 
     async function loadProducts(
       db: NonNullable<typeof supabase>,
-    ): Promise<void> {
+    ) {
       try {
         const { data, error: queryError } = await db
           .from("products")
@@ -143,32 +175,37 @@ export default function Storefront() {
     };
   }, [supabase]);
 
+  // Restore the shopping cart.
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem("shagunwala-cart-v1");
+      const saved = localStorage.getItem("shagunwala-cart-v1");
+
       if (saved) {
         setCart(JSON.parse(saved) as Record<string, number>);
       }
     } catch {
-      // Ignore invalid cart data.
+      // Ignore invalid browser storage.
     }
   }, []);
 
+  // Save cart changes.
   useEffect(() => {
     try {
-      window.localStorage.setItem(
+      localStorage.setItem(
         "shagunwala-cart-v1",
         JSON.stringify(cart),
       );
     } catch {
-      // Local storage is optional.
+      // Storage is optional.
     }
   }, [cart]);
 
   const categories = useMemo(
     () => [
       "All products",
-      ...Array.from(new Set(products.map((p) => p.category))).sort(),
+      ...Array.from(
+        new Set(products.map((product) => product.category)),
+      ).sort(),
     ],
     [products],
   );
@@ -178,11 +215,13 @@ export default function Storefront() {
 
     return products.filter((product) => {
       const searchable =
-        `${product.name} ${product.category} ${product.description}`.toLowerCase();
+        `${product.name} ${product.category} ${product.description}`
+          .toLowerCase();
 
       return (
         searchable.includes(search) &&
-        (category === "All products" || product.category === category)
+        (category === "All products" ||
+          product.category === category)
       );
     });
   }, [products, query, category]);
@@ -191,7 +230,7 @@ export default function Storefront() {
     () =>
       Object.entries(cart)
         .map(([id, quantity]) => ({
-          product: products.find((p) => p.id === id),
+          product: products.find((product) => product.id === id),
           quantity,
         }))
         .filter(
@@ -206,7 +245,8 @@ export default function Storefront() {
   );
 
   const total = cartItems.reduce(
-    (sum, item) => sum + Number(item.product.price) * item.quantity,
+    (sum, item) =>
+      sum + Number(item.product.price) * item.quantity,
     0,
   );
 
@@ -215,6 +255,7 @@ export default function Storefront() {
 
     setCart((current) => {
       const quantity = current[product.id] ?? 0;
+
       if (quantity >= product.stock) return current;
 
       return {
@@ -225,7 +266,9 @@ export default function Storefront() {
   }
 
   function setQuantity(id: string, quantity: number) {
-    const stock = products.find((p) => p.id === id)?.stock ?? 0;
+    const stock = products.find(
+      (product) => product.id === id,
+    )?.stock ?? 0;
 
     setCart((current) => {
       if (quantity <= 0) {
@@ -245,7 +288,6 @@ export default function Storefront() {
     setCartOpen(false);
     setCheckoutOpen(true);
     setError("");
-    setCaptchaToken("");
     setIdempotencyKey(createOrderKey());
   }
 
@@ -254,10 +296,11 @@ export default function Storefront() {
 
     setCheckoutOpen(false);
     setError("");
-    setCaptchaToken("");
   }
 
-  async function placeOrder(event: FormEvent<HTMLFormElement>) {
+  async function placeOrder(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
     setError("");
 
@@ -269,7 +312,9 @@ export default function Storefront() {
     }
 
     if (!normalizedPhone) {
-      setError("Enter a valid 10-digit Indian mobile number.");
+      setError(
+        "Enter a valid 10-digit Indian mobile number without a leading zero.",
+      );
       return;
     }
 
@@ -284,17 +329,12 @@ export default function Storefront() {
     }
 
     if (!supabase) {
-      setError("Supabase is not configured. Please check .env.local.");
-      return;
-    }
-
-    if (!captchaToken && process.env.NODE_ENV === "production") {
-      setError("Please complete the security check before ordering.");
+      setError("The order service is not configured.");
       return;
     }
 
     if (!idempotencyKey) {
-      setError("Please close and reopen checkout, then try again.");
+      setError("Please close checkout and try again.");
       return;
     }
 
@@ -303,7 +343,9 @@ export default function Storefront() {
     try {
       const response = await fetch("/api/orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           customer_name: name.trim(),
           customer_phone: normalizedPhone,
@@ -313,7 +355,6 @@ export default function Storefront() {
             quantity,
           })),
           idempotency_key: idempotencyKey,
-          captchaToken,
         }),
       });
 
@@ -322,19 +363,13 @@ export default function Storefront() {
       if (!response.ok) {
         setError(
           result.error ||
-            "Your order could not be submitted. Please try again.",
+            "Order could not be submitted. Please try again.",
         );
         return;
       }
 
       setOrderId(String(result.orderId || ""));
-      setCheckoutOpen(false);
       setCart({});
-      setCaptchaToken("");
-
-      alert(
-        `Order request received!\nOrder ID: ${result.orderId || "Submitted"}\nStatus: Pending Confirmation`,
-      );
     } catch {
       setError("Connection error. Please try again.");
     } finally {
@@ -381,7 +416,7 @@ export default function Storefront() {
       <section className="hero">
         <div className="hero-copy">
           <span className="eyebrow">
-            <span>✧</span> FESTIVE FINDS, THOUGHTFULLY PICKED
+            ✧ FESTIVE FINDS, THOUGHTFULLY PICKED
           </span>
           <h1>
             Little things.
@@ -389,8 +424,8 @@ export default function Storefront() {
             <em>Beautiful traditions.</em>
           </h1>
           <p>
-            From glowing diyas to pooja murtis and festive decorations,
-            find the essentials that make every celebration special.
+            From glowing diyas to pooja murtis and festive
+            decorations, find essentials for every celebration.
           </p>
           <div className="hero-actions">
             <a href="#products" className="button button-primary">
@@ -402,10 +437,6 @@ export default function Storefront() {
             >
               View bag ({cartCount})
             </button>
-          </div>
-          <div className="hero-trust">
-            <span>✦ Carefully selected essentials</span>
-            <span>✦ Personal service from our shop</span>
           </div>
         </div>
 
@@ -453,11 +484,11 @@ export default function Storefront() {
       <section id="collections" className="section collections-section">
         <div className="section-heading">
           <div>
-            <span className="eyebrow">FIND YOUR FESTIVE FAVOURITES</span>
+            <span className="eyebrow">FESTIVE FAVOURITES</span>
             <h2>Shop by collection</h2>
           </div>
           <a href="#products" className="text-link">
-            Browse all products <span>→</span>
+            Browse all products →
           </a>
         </div>
 
@@ -481,9 +512,7 @@ export default function Storefront() {
                   {categoryMeta[item]?.icon || "🎁"}
                 </span>
                 <strong>{item}</strong>
-                <small>
-                  Explore collection <span>↗</span>
-                </small>
+                <small>Explore collection ↗</small>
               </button>
             ))}
         </div>
@@ -492,11 +521,8 @@ export default function Storefront() {
       <section id="products" className="section products-section">
         <div className="section-heading product-heading">
           <div>
-            <span className="eyebrow">A LITTLE SOMETHING FOR YOUR HOME</span>
+            <span className="eyebrow">POOJA & FESTIVE ESSENTIALS</span>
             <h2>Festive essentials</h2>
-            <p className="muted">
-              Product prices and stock are updated by our shop.
-            </p>
           </div>
 
           <div className="product-tools">
@@ -509,6 +535,7 @@ export default function Storefront() {
                 aria-label="Search products"
               />
             </label>
+
             <select
               value={category}
               onChange={(event) => setCategory(event.target.value)}
@@ -521,22 +548,12 @@ export default function Storefront() {
           </div>
         </div>
 
-        {!liveReady && (
-          <div className="preview-banner">
-            <strong>Preview mode</strong>
-            <span>
-              Sample products are shown. Connect Supabase to show live
-              products and receive customer order requests.
-            </span>
-          </div>
-        )}
-
         {loadError && (
           <div className="form-error inline-error">{loadError}</div>
         )}
 
         {loading ? (
-          <div className="loading-state">Loading the collection…</div>
+          <div className="loading-state">Loading products…</div>
         ) : visibleProducts.length > 0 ? (
           <div className="product-grid">
             {visibleProducts.map((product) => {
@@ -544,7 +561,8 @@ export default function Storefront() {
                 icon: "🎁",
                 colour: "cream",
               };
-              const inCart = cart[product.id] || 0;
+
+              const quantity = cart[product.id] || 0;
 
               return (
                 <article className="product-card" key={product.id}>
@@ -594,10 +612,8 @@ export default function Storefront() {
                       {product.category}
                     </span>
                     <h3>{product.name}</h3>
-                    <p>
-                      {product.description ||
-                        "A lovely pick for your festive home."}
-                    </p>
+                    <p>{product.description}</p>
+
                     <div className="product-bottom">
                       <div>
                         <strong>{money(Number(product.price))}</strong>
@@ -607,13 +623,14 @@ export default function Storefront() {
                         className="add-button"
                         onClick={() => add(product)}
                         disabled={
-                          product.stock <= 0 || inCart >= product.stock
+                          product.stock <= 0 ||
+                          quantity >= product.stock
                         }
                       >
                         {product.stock <= 0
                           ? "Unavailable"
-                          : inCart
-                            ? `Added (${inCart}) +`
+                          : quantity > 0
+                            ? `Added (${quantity}) +`
                             : "+ Add to bag"}
                       </button>
                     </div>
@@ -624,22 +641,8 @@ export default function Storefront() {
           </div>
         ) : (
           <div className="empty-state">
-            <span>✧</span>
-            <h3>
-              {liveReady
-                ? "Your collection is getting ready"
-                : "No products found"}
-            </h3>
-            <p>
-              {liveReady
-                ? "The shop admin can add products from the admin panel."
-                : "Try a different search or category."}
-            </p>
-            {liveReady && (
-              <Link className="button button-outline" href="/admin/login">
-                Open admin panel
-              </Link>
-            )}
+            <h3>No products found</h3>
+            <p>Try another search or category.</p>
           </div>
         )}
       </section>
@@ -651,20 +654,16 @@ export default function Storefront() {
           <span className="promise-spark spark-two">✳</span>
         </div>
         <div>
-          <span className="eyebrow">A SHOP THAT FEELS CLOSE TO HOME</span>
+          <span className="eyebrow">A SHOP CLOSE TO HOME</span>
           <h2>
             Traditions deserve
             <br />
             <em>the little details.</em>
           </h2>
           <p>
-            We bring together pooja essentials, handmade touches and festive
-            favourites for every auspicious moment. Browse at your own pace
-            and place an order when ready.
+            Browse pooja essentials, festive decorations and gifts.
+            Our shop will confirm your order before dispatch.
           </p>
-          <a href="#products" className="text-link">
-            Find your favourites <span>→</span>
-          </a>
         </div>
       </section>
 
@@ -672,13 +671,10 @@ export default function Storefront() {
         <div>
           <span className="eyebrow">NEED A HAND?</span>
           <h2>Not sure what you need?</h2>
-          <p>
-            Browse the catalogue or contact the shop for availability and
-            order confirmation.
-          </p>
+          <p>Contact the shop to confirm availability.</p>
         </div>
         <a href="#products" className="button button-light">
-          Explore products <span>↗</span>
+          Explore products →
         </a>
       </section>
 
@@ -707,14 +703,12 @@ export default function Storefront() {
             <div className="drawer-head">
               <div>
                 <span className="eyebrow">YOUR SELECTION</span>
-                <h2>
-                  Your bag <small>({cartCount})</small>
-                </h2>
+                <h2>Your bag ({cartCount})</h2>
               </div>
               <button
                 className="close-button"
                 onClick={() => setCartOpen(false)}
-                aria-label="Close bag"
+                aria-label="Close cart"
               >
                 ×
               </button>
@@ -736,11 +730,13 @@ export default function Storefront() {
                           categoryMeta[product.category]?.icon || "🎁"
                         )}
                       </div>
+
                       <div className="drawer-item-main">
                         <strong>{product.name}</strong>
                         <small>
                           {money(Number(product.price))} / {product.unit}
                         </small>
+
                         <div className="qty-stepper">
                           <button
                             onClick={() =>
@@ -762,6 +758,7 @@ export default function Storefront() {
                           </button>
                         </div>
                       </div>
+
                       <strong className="line-price">
                         {money(Number(product.price) * quantity)}
                       </strong>
@@ -773,22 +770,22 @@ export default function Storefront() {
                   <span>Estimated total</span>
                   <strong>{money(total)}</strong>
                 </div>
+
                 <p className="checkout-note">
-                  Final availability and delivery charges, if any, will be
-                  confirmed by the shop.
+                  Final availability and delivery charges, if any, will
+                  be confirmed by the shop.
                 </p>
+
                 <button
                   className="button button-primary full-width"
                   onClick={openCheckout}
                 >
-                  Continue to checkout <span>→</span>
+                  Continue to checkout →
                 </button>
               </>
             ) : (
               <div className="empty-cart">
-                <span>✧</span>
-                <h3>Your bag is waiting</h3>
-                <p>Explore the collection and add something special.</p>
+                <h3>Your bag is empty</h3>
                 <button
                   className="button button-primary"
                   onClick={() => setCartOpen(false)}
@@ -813,7 +810,9 @@ export default function Storefront() {
             <div className="drawer-head">
               <div>
                 <span className="eyebrow">ORDER CHECKOUT</span>
-                <h2 id="checkout-title">Place your order</h2>
+                <h2 id="checkout-title">
+                  {orderId ? "Order received" : "Place your order"}
+                </h2>
               </div>
               <button
                 className="close-button"
@@ -824,92 +823,98 @@ export default function Storefront() {
               </button>
             </div>
 
-            <div className="checkout-steps">
-              <span className="active">
-                1 <small>Your details</small>
-              </span>
-              <i />
-              <span className="active">
-                2 <small>Security check</small>
-              </span>
-              <i />
-              <span>
-                3 <small>Confirmation</small>
-              </span>
-            </div>
-
-            <form className="checkout-form" onSubmit={placeOrder}>
-              <label>
-                Full name
-                <input
-                  autoComplete="name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Your full name"
-                  maxLength={100}
-                  minLength={2}
-                  required
-                />
-              </label>
-
-              <label>
-                Mobile number
-                <span className="phone-input">
-                  <span>🇮🇳 +91</span>
+            {orderId ? (
+              <div className="success-state">
+                <span className="success-icon">✓</span>
+                <h3>Order request received!</h3>
+                <p>
+                  Your reference is{" "}
+                  <strong>{orderId.slice(0, 8).toUpperCase()}</strong>.
+                  The shop will contact you to confirm availability.
+                </p>
+                <div className="success-summary">
+                  <span>Status</span>
+                  <strong>Pending confirmation</strong>
+                </div>
+                <button
+                  className="button button-primary full-width"
+                  onClick={closeCheckout}
+                >
+                  Continue shopping
+                </button>
+              </div>
+            ) : (
+              <form className="checkout-form" onSubmit={placeOrder}>
+                <label>
+                  Full name
                   <input
-                    autoComplete="tel-national"
-                    inputMode="numeric"
-                    value={phoneInput}
-                    onChange={(event) =>
-                      setPhoneInput(
-                        event.target.value
-                          .replace(/[^\d+\s-]/g, "")
-                          .slice(0, 14),
-                      )
-                    }
-                    placeholder="10-digit mobile number"
+                    autoComplete="name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Your full name"
+                    maxLength={100}
+                    minLength={2}
                     required
                   />
-                </span>
-              </label>
+                </label>
 
-              <label>
-                Full delivery address
-                <textarea
-                  autoComplete="street-address"
-                  value={address}
-                  onChange={(event) => setAddress(event.target.value)}
-                  placeholder="House / street, area, city, state, PIN code"
-                  minLength={10}
-                  maxLength={800}
-                  rows={3}
-                  required
-                />
-              </label>
+                <label>
+                  Mobile number
+                  <span className="phone-input">
+                    <span>IN +91</span>
+                    <input
+                      autoComplete="tel-national"
+                      inputMode="numeric"
+                      value={phoneInput}
+                      onChange={(event) =>
+                        setPhoneInput(
+                          event.target.value
+                            .replace(/[^\d+\s-]/g, "")
+                            .slice(0, 14),
+                        )
+                      }
+                      placeholder="10-digit mobile number"
+                      required
+                    />
+                  </span>
+                </label>
 
-              <div className="checkout-total-line">
-                <span>Estimated total ({cartCount} items)</span>
-                <strong>{money(total)}</strong>
-              </div>
+                <label>
+                  Full delivery address
+                  <textarea
+                    autoComplete="street-address"
+                    value={address}
+                    onChange={(event) => setAddress(event.target.value)}
+                    placeholder="House, street, area, city, state and PIN code"
+                    minLength={10}
+                    maxLength={800}
+                    rows={3}
+                    required
+                  />
+                </label>
 
-              <TurnstileWidget onToken={setCaptchaToken} />
+                <div className="checkout-total-line">
+                  <span>Estimated total ({cartCount} items)</span>
+                  <strong>{money(total)}</strong>
+                </div>
 
-              <button
-                className="button button-primary full-width"
-                type="submit"
-                disabled={busy}
-              >
-                {busy ? "Submitting order…" : "Submit order request"}{" "}
-                <span>→</span>
-              </button>
+                <button
+                  className="button button-primary full-width"
+                  type="submit"
+                  disabled={busy}
+                >
+                  {busy ? "Submitting order…" : "Place order"} →
+                </button>
 
-              <p className="tiny-note">
-                No SMS OTP or payment is needed. Your order remains pending
-                until the shop confirms it by phone or WhatsApp.
-              </p>
+                <p className="tiny-note">
+                  No SMS OTP, CAPTCHA or online payment is needed.
+                  Your order stays pending until the shop confirms it
+                  by phone or WhatsApp.
+                </p>
 
-              {error && <p className="form-error">{error}</p>}
-            </form>
+                {error && <p className="form-error">{error}</p>}
+              </form>
+            )}
           </section>
         </div>
       )}

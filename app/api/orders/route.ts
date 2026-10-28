@@ -1,24 +1,30 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import {
-  cleanText,
-  normalizeIndianPhone,
-} from "@/lib/validation";
+import { normalizeIndianPhone } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+function cleanText(value: unknown, maxLength: number): string {
+  if (typeof value !== "string") return "";
+
+  return value
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const length = Number(
-      request.headers.get("content-length") || 0
+    const contentLength = Number(
+      request.headers.get("content-length") || 0,
     );
 
-    if (length > 32000) {
+    if (contentLength > 32_000) {
       return NextResponse.json(
         { error: "Order request is too large." },
-        { status: 413 }
+        { status: 413 },
       );
     }
 
@@ -27,7 +33,7 @@ export async function POST(request: NextRequest) {
     if (!db) {
       return NextResponse.json(
         { error: "Order service is not configured." },
-        { status: 503 }
+        { status: 503 },
       );
     }
 
@@ -35,97 +41,109 @@ export async function POST(request: NextRequest) {
 
     if (!salt) {
       return NextResponse.json(
-        { error: "Order security is not configured." },
-        { status: 503 }
+        { error: "Order service security is not configured." },
+        { status: 503 },
       );
     }
 
-    const raw = await request.text();
+    const rawBody = await request.text();
 
-    if (raw.length > 32000) {
+    if (rawBody.length > 32_000) {
       return NextResponse.json(
         { error: "Order request is too large." },
-        { status: 413 }
+        { status: 413 },
       );
     }
 
-    let body: unknown;
+    let parsed: unknown;
 
     try {
-      body = JSON.parse(raw);
+      parsed = JSON.parse(rawBody);
     } catch {
       return NextResponse.json(
-        { error: "Invalid request." },
-        { status: 400 }
+        { error: "Invalid request format." },
+        { status: 400 },
       );
     }
 
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
       return NextResponse.json(
         { error: "Invalid order details." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const p = body as Record<string, unknown>;
+    const body = parsed as Record<string, unknown>;
 
-    const name = cleanText(p.customer_name, 100);
-    const phone = normalizeIndianPhone(
-      typeof p.customer_phone === "string"
-        ? p.customer_phone
-        : ""
+    const customerName = cleanText(body.customer_name, 100);
+    const customerPhone = normalizeIndianPhone(
+      typeof body.customer_phone === "string"
+        ? body.customer_phone
+        : "",
     );
-    const address = cleanText(p.address, 800);
-    const key = cleanText(p.idempotency_key, 80);
+    const address = cleanText(body.address, 800);
+    const idempotencyKey = cleanText(body.idempotency_key, 80);
 
-    if (name.length < 2) {
+    if (customerName.length < 2) {
       return NextResponse.json(
-        { error: "Enter your full name." },
-        { status: 400 }
+        { error: "Please enter your full name." },
+        { status: 400 },
       );
     }
 
-    if (!phone) {
+    if (!customerPhone) {
       return NextResponse.json(
-        { error: "Enter a valid Indian mobile number." },
-        { status: 400 }
+        { error: "Enter a valid 10-digit Indian mobile number." },
+        { status: 400 },
       );
     }
 
     if (address.length < 10) {
       return NextResponse.json(
-        { error: "Enter your complete delivery address." },
-        { status: 400 }
+        { error: "Please enter your complete delivery address." },
+        { status: 400 },
       );
     }
 
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key)
-    ) {
+    const validUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (!validUuid.test(idempotencyKey)) {
       return NextResponse.json(
         { error: "Please reopen checkout and try again." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (
-      !Array.isArray(p.items) ||
-      p.items.length < 1 ||
-      p.items.length > 20
+      !Array.isArray(body.items) ||
+      body.items.length < 1 ||
+      body.items.length > 20
     ) {
       return NextResponse.json(
         { error: "Your cart is empty or invalid." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const items: { product_id: string; quantity: number }[] = [];
+    const items: {
+      product_id: string;
+      quantity: number;
+    }[] = [];
 
-    for (const entry of p.items) {
-      if (!entry || typeof entry !== "object") {
+    for (const entry of body.items) {
+      if (
+        !entry ||
+        typeof entry !== "object" ||
+        Array.isArray(entry)
+      ) {
         return NextResponse.json(
           { error: "Invalid cart item." },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -142,7 +160,7 @@ export async function POST(request: NextRequest) {
       ) {
         return NextResponse.json(
           { error: "Invalid product or quantity." },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -152,41 +170,52 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    const remoteIp =
+      request.headers.get("x-real-ip") ||
+      request.headers
+        .get("x-forwarded-for")
+        ?.split(",")[0]
+        .trim() ||
       "unknown";
 
     const ipHash = createHash("sha256")
-      .update(`${salt}:${ip}`)
+      .update(`${salt}:${remoteIp}`)
       .digest("hex");
 
-    // No OTP and no CAPTCHA.
-    // Database still validates stock, price and order limits.
+    // No OTP or CAPTCHA.
+    // The database still checks prices, stock and order limits.
     const { data: orderId, error } = await db.rpc(
       "create_guest_customer_order",
       {
-        p_customer_name: name,
-        p_customer_phone: phone,
+        p_customer_name: customerName,
+        p_customer_phone: customerPhone,
         p_address: address,
         p_items: items,
-        p_idempotency_key: key,
+        p_idempotency_key: idempotencyKey,
         p_ip_hash: ipHash,
-      }
+      },
     );
 
     if (error) {
-      const message = error.message || "Order could not be saved.";
+      console.error("Order database error:", error.message);
 
-      const status =
-        /too many|wait 10 minutes|wait/i.test(message)
-          ? 429
-          : /stock|not available|insufficient/i.test(message)
-            ? 409
-            : 400;
+      const databaseMessage = error.message || "";
+      const rateLimited = /too many|wait 10 minutes|rate limit/i.test(
+        databaseMessage,
+      );
+      const stockError = /stock|not available|insufficient/i.test(
+        databaseMessage,
+      );
 
       return NextResponse.json(
-        { error: message },
-        { status }
+        {
+          error: rateLimited
+            ? "Too many orders. Please wait a little and try again."
+            : stockError
+              ? "A product is unavailable or the stock has changed."
+              : "The order could not be saved. Please try again.",
+        },
+        { status: rateLimited ? 429 : stockError ? 409 : 400 },
       );
     }
 
@@ -201,14 +230,14 @@ export async function POST(request: NextRequest) {
         headers: {
           "Cache-Control": "no-store, private",
         },
-      }
+      },
     );
   } catch (error) {
-    console.error("Order submission failed:", error);
+    console.error("Order submission error:", error);
 
     return NextResponse.json(
-      { error: "Unable to place the order. Please try again." },
-      { status: 500 }
+      { error: "Unable to submit your order. Please try again." },
+      { status: 500 },
     );
   }
 }
